@@ -1,82 +1,158 @@
-'use client'; // Needed for params
+'use client';
 
-import React from 'react';
-import { useParams } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-
-// Mock function to get store item data by ID - replace with actual data fetching
-const getMockStoreItemData = (itemId: string | string[] | undefined) => {
-  if (!itemId || Array.isArray(itemId)) return null;
-
-  const mockPublicAgents = [
-    { id: 'pa1', type: 'Agent Template', name: 'Simple ETH/USDC Arbitrage (Uniswap/Sushiswap)', description: 'Basic hourly arbitrage agent template using Price Feed & DEX Swap MCPs.', details: 'Checks prices every hour. Executes swap if profit > 0.01 ETH (configurable). Requires Price Feed MCP and DEX Swap MCP configured.', author: 'Community', tags: ['Arbitrage', 'DeFi', 'Hourly'] },
-    { id: 'pa2', type: 'Agent Template', name: 'Top 10 KOL Follower Template', description: 'Follows a curated list of KOLs via Social Feed MCP and executes trades via DEX Swap MCP.', details: 'Monitors tweets from predefined KOL list. Buys tokens mentioned with positive sentiment (configurable). Requires Social Feed MCP and DEX Swap MCP.', author: 'AutoMCP Team', tags: ['Trading', 'Social', 'KOL'] },
-    { id: 'pa3', type: 'Agent Template', name: 'NFT Floor Price Sweeper', description: 'Monitors floor price of a specified NFT collection via NFT Market MCP and buys listings below threshold.', details: 'Checks floor price every 5 minutes. Buys listed NFTs below the set threshold. Requires NFT Market MCP.', author: 'Community', tags: ['NFT', 'Utility'] },
-  ];
-
-  const mockMcpServices = [
-    { id: 'mcp-dex', type: 'MCP Service', name: 'DEX Swap MCP', description: 'Executes token swaps on decentralized exchanges (e.g., Uniswap, Sushiswap).', details: 'Supports multiple DEXs. Requires wallet connection with sufficient funds and approvals.', author: 'AutoMCP Core', tags: ['DeFi', 'Trading', 'Core'] },
-    { id: 'mcp-price', type: 'MCP Service', name: 'Price Feed MCP', description: 'Provides real-time or historical price data for various assets.', details: 'Supports various price oracles and APIs. Free tier available with rate limits.', author: 'AutoMCP Core', tags: ['Data', 'Core'] },
-    { id: 'mcp-social', type: 'MCP Service', name: 'Social Feed MCP', description: 'Monitors social media platforms (Twitter, Telegram) for keywords or specific users.', details: 'Requires API keys for some platforms. Supports sentiment analysis (optional).', author: 'AutoMCP Core', tags: ['Data', 'Social'] },
-    { id: 'mcp-chain', type: 'MCP Service', name: 'Chain Event MCP', description: 'Listens for specific on-chain events like contract deployments or wallet transactions.', details: 'Supports multiple EVM chains. Configurable event filters.', author: 'AutoMCP Core', tags: ['On-Chain', 'Core'] },
-    { id: 'mcp-cex', type: 'MCP Service', name: 'CEX Trade MCP', description: 'Executes trades on centralized exchanges (requires API keys).', details: 'Supports Binance, KuCoin, etc. Requires user-provided API keys stored securely.', author: 'AutoMCP Core', tags: ['Trading', 'CEX'] },
-    { id: 'mcp-nft', type: 'MCP Service', name: 'NFT Market MCP', description: 'Interacts with NFT marketplaces for listings, bids, and purchases.', details: 'Supports OpenSea, Blur. Requires wallet connection.', author: 'AutoMCP Core', tags: ['NFT', 'Trading'] },
-    { id: 'mcp-playwright', type: 'MCP Service', name: 'Playwright MCP', description: 'Enables browser automation tasks (useful for web interactions).', details: 'Runs Playwright scripts in a sandboxed environment. Useful for interacting with sites lacking APIs.', author: 'Community', tags: ['Utility', 'Web'] },
-  ];
-
-  const allItems = [...mockPublicAgents, ...mockMcpServices];
-  return allItems.find(item => item.id === itemId);
-};
-
+import { getStoreItemById, createAgentFromTemplate, configureMcpService } from '../actions';
+import { ItemType } from '@/app/generated/prisma';
+import toast from 'react-hot-toast';
 
 const StoreItemDetailPage = () => {
   const params = useParams();
-  const itemId = params?.itemId;
-  const item = getMockStoreItemData(itemId);
+  const router = useRouter();
+  const itemId = params?.itemId as string;
+  
+  const [item, setItem] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+
+  // 加载商店项目详情
+  useEffect(() => {
+    const fetchItemDetails = async () => {
+      try {
+        const data = await getStoreItemById(itemId);
+        setItem(data);
+        setLoading(false);
+      } catch (error) {
+        console.error("加载商店项目详情失败:", error);
+        toast.error("无法加载商店项目详情");
+        setLoading(false);
+      }
+    };
+    
+    if (itemId) {
+      fetchItemDetails();
+    }
+  }, [itemId]);
+
+  // 从模板创建代理
+  const handleCreateAgentFromTemplate = async () => {
+    if (!item || item.type !== ItemType.AGENT_TEMPLATE) return;
+    
+    try {
+      setProcessing(true);
+      const result = await createAgentFromTemplate(item.id);
+      
+      if (result.success) {
+        toast.success(result.message);
+        // 创建成功后重定向到新代理的详情页
+        router.push(`/agents/${result.agentId}`);
+      } else {
+        toast.error(result.message);
+        setProcessing(false);
+      }
+    } catch (error) {
+      console.error("从模板创建代理失败:", error);
+      toast.error("创建代理失败");
+      setProcessing(false);
+    }
+  };
+
+  // 配置MCP服务
+  const handleConfigureMcpService = async () => {
+    if (!item || item.type !== ItemType.MCP_SERVICE) return;
+    
+    try {
+      setProcessing(true);
+      const result = await configureMcpService(item.id);
+      
+      if (result.success) {
+        toast.success(result.message);
+        setProcessing(false);
+        // 可以添加其他逻辑，例如显示配置弹窗或重定向
+      } else {
+        toast.error(result.message);
+        setProcessing(false);
+      }
+    } catch (error) {
+      console.error("配置MCP服务失败:", error);
+      toast.error("配置服务失败");
+      setProcessing(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="flex justify-center items-center min-h-screen">
+      <span className="loading loading-spinner loading-lg"></span>
+    </div>;
+  }
 
   if (!item) {
-    return <div className="text-center text-error font-pixel p-10">Item not found!</div>;
+    return <div className="text-center text-error p-10">商店项目不存在!</div>;
   }
 
   return (
     <div className="p-4">
-      {/* Header */}
+      {/* 头部 */}
       <div className="mb-6">
-        <div className="flex justify-between items-start">
-            <div>
-                <div className="badge badge-accent badge-outline mb-2">{item.type}</div>
-                <h1 className="text-3xl mb-1">{item.name}</h1>
-                <p className="text-sm text-base-content/70">by {item.author}</p>
+        <div className="flex justify-between items-start flex-wrap gap-4">
+          <div>
+            <div className="badge badge-accent badge-outline mb-2">
+              {item.type === ItemType.AGENT_TEMPLATE ? '代理模板' : 'MCP服务'}
             </div>
-            {item.type === 'Agent Template' && (
-                 <button className="btn btn-primary">Add to My Agents</button>
-            )}
-             {item.type === 'MCP Service' && (
-                 <button className="btn btn-secondary">Configure Service</button> // Or just view details
-            )}
+            <h1 className="text-3xl mb-1">{item.name}</h1>
+            <p className="text-sm text-base-content/70">创建者：{item.creator}</p>
+          </div>
+          {item.type === ItemType.AGENT_TEMPLATE && (
+            <button 
+              className="btn btn-primary" 
+              onClick={handleCreateAgentFromTemplate}
+              disabled={processing}
+            >
+              {processing ? <span className="loading loading-spinner loading-sm"></span> : '添加到我的代理'}
+            </button>
+          )}
+          {item.type === ItemType.MCP_SERVICE && (
+            <button 
+              className="btn btn-secondary" 
+              onClick={handleConfigureMcpService}
+              disabled={processing}
+            >
+              {processing ? <span className="loading loading-spinner loading-sm"></span> : '配置服务'}
+            </button>
+          )}
         </div>
-         <div className="mt-3 flex gap-2 flex-wrap">
-            {item.tags?.map(tag => (
-                <div key={tag} className="badge badge-neutral">{tag}</div>
+        {item.tags && item.tags.length > 0 && (
+          <div className="mt-3 flex gap-2 flex-wrap">
+            {item.tags.map((tag: string, index: number) => (
+              <div key={index} className="badge badge-neutral">{tag}</div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* 详情部分 */}
+      <div className="card bg-base-100 shadow-xl">
+        <div className="card-body">
+          <h2 className="card-title mb-2">描述</h2>
+          <p className="mb-4">{item.description || '无描述'}</p>
+          <h2 className="card-title mb-2">详细信息</h2>
+          <p className="whitespace-pre-wrap font-mono text-sm">{item.details || '无详细信息'}</p>
+          
+          {/* MCP服务显示相关的MCP信息 */}
+          {item.type === ItemType.MCP_SERVICE && item.mcp && (
+            <div className="mt-4">
+              <h2 className="card-title mb-2">关联的MCP</h2>
+              <p><span className="font-semibold">MCP名称：</span> {item.mcp.name}</p>
+              <p><span className="font-semibold">MCP类型：</span> {item.mcp.type}</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Details Section */}
-      <div className="card bg-base-100 shadow-xl">
-         <div className="card-body">
-            <h2 className="card-title font-pixel mb-2">Description</h2>
-            <p className="mb-4">{item.description}</p>
-            <h2 className="card-title font-pixel mb-2">Details</h2>
-            <p className="whitespace-pre-wrap font-mono text-sm">{item.details}</p>
-            {/* Add more sections like Usage Examples, Reviews etc. later */}
-         </div>
+      <div className="mt-8">
+        <Link href="/store" className="btn btn-outline">&lt; 返回商店</Link>
       </div>
-
-       <div className="mt-8">
-            <Link href="/store" className="btn btn-outline">&lt; Back to Store</Link>
-       </div>
-
     </div>
   );
 };

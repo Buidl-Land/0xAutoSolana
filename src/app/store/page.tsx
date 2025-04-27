@@ -1,67 +1,109 @@
-import React from 'react';
-import Link from 'next/link'; // Import Link
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { getAgentTemplates, getMcpServices } from './actions';
+import toast from 'react-hot-toast';
 
 const StorePage = () => {
-  // Mock data - replace later
-  // Mock data reflecting README examples - Added creator
-  const publicAgents = [
-    { id: 'pa1', name: 'Simple ETH/USDC Arbitrage (Uniswap/Sushiswap)', description: 'Basic hourly arbitrage agent template using Price Feed & DEX Swap MCPs.', creator: 'AutoMCP Team' },
-    { id: 'pa2', name: 'Top 10 KOL Follower Template', description: 'Follows a curated list of KOLs via Social Feed MCP and executes trades via DEX Swap MCP.', creator: 'CommunityDev' },
-    { id: 'pa3', name: 'NFT Floor Price Sweeper', description: 'Monitors floor price of a specified NFT collection via NFT Market MCP and buys listings below threshold.', creator: 'NFTMaster' },
-  ];
+  const [publicAgents, setPublicAgents] = useState<any[]>([]);
+  const [mcpServices, setMcpServices] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const mcpServices = [
-    { id: 'mcp-dex', name: 'DEX Swap MCP', description: 'Executes token swaps on decentralized exchanges (e.g., Uniswap, Sushiswap).', creator: 'AutoMCP Team' },
-    { id: 'mcp-price', name: 'Price Feed MCP', description: 'Provides real-time or historical price data for various assets.', creator: 'AutoMCP Team' },
-    { id: 'mcp-social', name: 'Social Feed MCP', description: 'Monitors social media platforms (Twitter, Telegram) for keywords or specific users.', creator: 'CommunityDev' },
-    { id: 'mcp-chain', name: 'Chain Event MCP', description: 'Listens for specific on-chain events like contract deployments or wallet transactions.', creator: 'AutoMCP Team' },
-    { id: 'mcp-cex', name: 'CEX Trade MCP', description: 'Executes trades on centralized exchanges (requires API keys).', creator: 'ProUser123' },
-    { id: 'mcp-nft', name: 'NFT Market MCP', description: 'Interacts with NFT marketplaces for listings, bids, and purchases.', creator: 'NFTMaster' },
-    { id: 'mcp-playwright', name: 'Playwright MCP', description: 'Enables browser automation tasks (useful for web interactions).', creator: 'AutoMCP Team' },
-  ];
+  // 加载商店数据
+  useEffect(() => {
+    const fetchStoreData = async () => {
+      try {
+        const [templates, services] = await Promise.all([
+          getAgentTemplates(),
+          getMcpServices()
+        ]);
+        
+        setPublicAgents(templates);
+        setMcpServices(services);
+        setLoading(false);
+      } catch (error) {
+        console.error("加载商店数据失败:", error);
+        toast.error("无法加载商店数据");
+        setLoading(false);
+      }
+    };
+    
+    fetchStoreData();
+  }, []);
+
+  if (loading) {
+    return <div className="flex justify-center items-center min-h-screen">
+      <span className="loading loading-spinner loading-lg"></span>
+    </div>;
+  }
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Store</h1>
+      <h1 className="text-2xl font-bold mb-6">商店</h1>
 
       <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Public Agents</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {publicAgents.map((agent) => (
-            <Link key={agent.id} href={`/store/${agent.id}`} className="card bg-base-100 shadow-xl hover:bg-base-200 transition-colors duration-200 cursor-pointer block"> {/* Wrap card in Link, add hover effect */}
-              <div className="card-body">
-                <div className="tooltip w-full" data-tip={agent.name}>
-                  {/* Added min-h-12 */}
-                  <h3 className="card-title text-lg line-clamp-2 min-h-12">{agent.name}</h3>
+        <h2 className="text-xl font-semibold mb-4">代理模板</h2>
+        {publicAgents.length === 0 ? (
+          <div className="card bg-base-100 shadow-xl p-4 text-center">
+            <p>暂无可用的代理模板</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {publicAgents.map((agent) => (
+              <Link key={agent.id} href={`/store/${agent.id}`} className="card bg-base-100 shadow-xl hover:bg-base-200 transition-colors duration-200 cursor-pointer block">
+                <div className="card-body">
+                  <div className="tooltip w-full" data-tip={agent.name}>
+                    <h3 className="card-title text-lg line-clamp-2 min-h-12">{agent.name}</h3>
+                  </div>
+                  <p className="text-sm text-base-content/70 mb-2 flex-grow line-clamp-2">{agent.description || '无描述'}</p>
+                  <div className="text-xs text-base-content/50 mt-auto pt-2 border-t border-base-300/50">
+                    创建者: {agent.creator}
+                  </div>
+                  {agent.tags && agent.tags.length > 0 && (
+                    <div className="flex gap-1 flex-wrap mt-2">
+                      {agent.tags.map((tag: string, index: number) => (
+                        <span key={index} className="badge badge-sm badge-outline">{tag}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <p className="text-sm text-base-content/70 mb-2 flex-grow line-clamp-2">{agent.description}</p> {/* Added line-clamp-2 */}
-                <div className="text-xs text-base-content/50 mt-auto pt-2 border-t border-base-300/50"> {/* Added creator */}
-                   Creator: {agent.creator}
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
 
       <section>
-        <h2 className="text-xl font-semibold mb-4">Available MCP Services</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {mcpServices.map((mcp) => (
-            <Link key={mcp.id} href={`/store/${mcp.id}`} className="card bg-base-100 shadow-xl hover:bg-base-200 transition-colors duration-200 cursor-pointer block"> {/* Wrap card in Link, add hover effect */}
-              <div className="card-body">
-                <div className="tooltip w-full" data-tip={mcp.name}>
-                   {/* Added min-h-12 */}
-                  <h3 className="card-title text-lg line-clamp-2 min-h-12">{mcp.name}</h3>
+        <h2 className="text-xl font-semibold mb-4">MCP 服务</h2>
+        {mcpServices.length === 0 ? (
+          <div className="card bg-base-100 shadow-xl p-4 text-center">
+            <p>暂无可用的MCP服务</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {mcpServices.map((mcp) => (
+              <Link key={mcp.id} href={`/store/${mcp.id}`} className="card bg-base-100 shadow-xl hover:bg-base-200 transition-colors duration-200 cursor-pointer block">
+                <div className="card-body">
+                  <div className="tooltip w-full" data-tip={mcp.name}>
+                    <h3 className="card-title text-lg line-clamp-2 min-h-12">{mcp.name}</h3>
+                  </div>
+                  <p className="text-sm text-base-content/70 mb-2 flex-grow line-clamp-2">{mcp.description || '无描述'}</p>
+                  <div className="text-xs text-base-content/50 mt-auto pt-2 border-t border-base-300/50">
+                    创建者: {mcp.creator}
+                  </div>
+                  {mcp.tags && mcp.tags.length > 0 && (
+                    <div className="flex gap-1 flex-wrap mt-2">
+                      {mcp.tags.map((tag: string, index: number) => (
+                        <span key={index} className="badge badge-sm badge-outline">{tag}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <p className="text-sm text-base-content/70 mb-2 flex-grow line-clamp-2">{mcp.description}</p> {/* Added line-clamp-2 */}
-                <div className="text-xs text-base-content/50 mt-auto pt-2 border-t border-base-300/50"> {/* Added creator */}
-                   Creator: {mcp.creator}
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );
