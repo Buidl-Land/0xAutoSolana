@@ -1,0 +1,194 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 用户模型
+model User {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  username       String   @unique
+  email          String   @unique
+  hashedPassword String? // 根据认证方式可能需要
+  systemPrompt   String?  @db.Text // 用户默认系统提示词
+  iconUrl        String? // 用户头像URL
+  currentPoints  Int      @default(0) // 当前可用积分
+  autoRecharge   Boolean  @default(false) // 是否自动充值
+
+  // 关联字段
+  agents       Agent[]
+  subscription Subscription?
+}
+
+// 订阅计划模型
+model Subscription {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  planType    PlanType  @default(FREE) // 订阅计划类型
+  startDate   DateTime  @default(now())
+  endDate     DateTime? // 订阅结束日期
+  dailyPoints Int       @default(30) // 每日获得的积分
+  swapFee     Float // 交换费率
+
+  // 关联字段
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum PlanType {
+  FREE
+  PRO
+  ELITE
+}
+
+// 代理模型
+model Agent {
+  id           String      @id @default(cuid())
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  name         String
+  description  String?     @db.Text
+  status       AgentStatus @default(STOPPED)
+  systemPrompt String?     @db.Text // 代理特定的系统提示词
+  iconUrl      String? // 代理图标URL
+
+  // 关联字段
+  userId   String
+  creator  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mcps     AgentMcp[]
+  triggers Trigger[]
+  logs     Log[]
+}
+
+enum AgentStatus {
+  RUNNING
+  STOPPED
+  ERROR
+}
+
+// MCP服务模型
+model Mcp {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  name        String
+  description String?  @db.Text
+  type        String // 例如: 'Price Feed', 'DEX Swap'等
+  author      String // MCP创建者
+  tags        String[] // 标签数组
+
+  // 关联字段
+  agents    AgentMcp[]
+  storeItem StoreItem?
+}
+
+// 代理-MCP关系模型（多对多）
+model AgentMcp {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  configuration Json? // MCP配置，例如API密钥、阈值等
+
+  // 关联字段
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  mcpId   String
+  mcp     Mcp    @relation(fields: [mcpId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, mcpId])
+}
+
+// 触发器模型
+model Trigger {
+  id            String      @id @default(cuid())
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  type          TriggerType
+  configuration Json // 触发器配置，如间隔、条件等
+
+  // 关联字段
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+}
+
+enum TriggerType {
+  SCHEDULED // 定时触发
+  EVENT_SOCIAL // 社交媒体事件
+  EVENT_PRICE // 价格变动事件
+  EVENT_CHAIN // 链上事件
+  // 其他触发类型...
+}
+
+// 日志模型
+model Log {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  message   String   @db.Text
+  // 可以添加额外字段如状态、执行结果等
+
+  // 关联字段
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+}
+
+// 商店项目模型
+model StoreItem {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  name        String
+  description String?  @db.Text
+  details     String?  @db.Text
+  type        ItemType // 类型：代理模板或MCP服务
+  creator     String // 创建者
+  tags        String[] // 标签数组
+
+  // 对于Agent模板
+  agentTemplate Json? // 存储代理模板配置
+
+  // 对于MCP服务
+  mcpId String? @unique
+  mcp   Mcp?    @relation(fields: [mcpId], references: [id])
+}
+
+enum ItemType {
+  AGENT_TEMPLATE
+  MCP_SERVICE
+}
+
+// 对话历史模型 (用于AgentChat)
+model ChatMessage {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  role      String // 'user' 或 'assistant'
+  content   String   @db.Text
+
+  // 关联字段
+  chatSessionId String
+  chatSession   ChatSession @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
+}
+
+// 聊天会话模型
+model ChatSession {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  title     String? // 会话标题
+
+  // 关联字段
+  agentId  String? // 可选关联到特定Agent
+  messages ChatMessage[]
+}
